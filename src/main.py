@@ -34,7 +34,7 @@ def make_model(args):
   criterion = nn.CrossEntropyLoss()
   ### END HERE ###
 
-  print('Done', file=settings.SHELL_OUT_FILE, flush=True)
+  print('Done\n', file=settings.SHELL_OUT_FILE, flush=True)
 
   return model, optimizer, criterion
 
@@ -165,7 +165,7 @@ def run(args):
         if (i + 1) % 10 == 0:
           print("\rTrain Step: {}/{} Loss: {}".format(i + 1,
                                                  total_train_examples,
-                                                 loss),
+                                                 loss.item()),
                 file=settings.SHELL_OUT_FILE, flush=True) # end='\r', 
       print("\rTrain Step: {}/{} Loss: {}".format(total_train_examples, 
                                              total_train_examples,
@@ -318,7 +318,7 @@ def run(args):
           Adapt to output that your processor give, send them to models,
           and calculate loss
           '''
-          inputs, labels = processor.convert_examples_to_tensor(example)
+          inputs = processor.convert_examples_to_tensor(example)
           labels = processor.convert_labels_to_tensor(example.labels,
                                                       labels_dict)
           predictions = model(*inputs)
@@ -353,6 +353,7 @@ def run(args):
         print("F-score", fval,
               file=settings.SHELL_OUT_FILE, flush=True)
         ### END HERE ###
+        print(file=settings.SHELL_OUT_FILE, flush=True)
 
 if __name__ == '__main__':
   run(args)

@@ -3,9 +3,9 @@ cd ${DSTC8_HOME}
 export EMBED_DIR=data/bert-embedding/
 export DATA_DIR=data/MRPC/
 
-lr=1e-4
-ep=100
-dp=0.2
+lr=2e-5
+ep=5
+dp=0.5
 b=32
 s=128
 wp=0.1
@@ -17,6 +17,7 @@ CUDA_VISIBLE_DEVICES=0,1 python src/main.py \
   --bert_file bert-base-cased \
   --do_train \
   --do_eval \
+  --do_predict \
   --learning_rate ${lr} \
   --epoch ${ep} \
   --use_cuda \
@@ -28,4 +29,3 @@ CUDA_VISIBLE_DEVICES=0,1 python src/main.py \
   --shell_print shell \
   --suffix last \
   --multi_gpu
-#  --do_predict \

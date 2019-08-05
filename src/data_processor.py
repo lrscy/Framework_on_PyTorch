@@ -87,20 +87,18 @@ class MRPCReader(DataReader):
                                           total_examples),
           end='\r', file=settings.SHELL_OUT_FILE, flush=True)
     for (i, line) in enumerate(lines):
-      if (i + 1) % 1000 == 0:
-        print("\rProcessed Examples: {}/{}".format(i + 1,
-                                              total_examples),
-              end='\r', file=settings.SHELL_OUT_FILE, flush=True)
       if i == 0:
         continue
+      if i % 1000 == 0:
+        print("\rProcessed Examples: {}/{}".format(i, total_examples),
+              end='\r', file=settings.SHELL_OUT_FILE, flush=True)
       text_a.append(convert_to_unicode(line[3]))
       text_b.append(convert_to_unicode(line[4]))
-      labels.append(convert_to_unicode(line[0]))
-#      if set_type == "test":
-#        label = '0'
-#      else:
-#        label = convert_to_unicode(line[0])
-#      labels.append(label)
+      if set_type == "test":
+        label = '0'
+      else:
+        label = convert_to_unicode(line[0])
+      labels.append(label)
 
       if i % self.batch_size == 0:
         examples.append(
@@ -108,6 +106,9 @@ class MRPCReader(DataReader):
         text_a = []
         text_b = []
         labels = []
+    if len(text_a):
+      examples.append(
+        InputExample(text_a=text_a, text_b=text_b, labels=labels))
     print("\rProcessed Examples: {}/{}".format(total_examples,
                                                total_examples),
           file=settings.SHELL_OUT_FILE, flush=True)
