@@ -11,7 +11,7 @@ s=128
 wp=0.1
 run=1
 
-CUDA_VISIBLE_DEVICES=0,1 python src/main.py \
+CUDA_VISIBLE_DEVICES=2,3 python src/main.py \
   --data_dir ${DATA_DIR} \
   --bert_dir ${EMBED_DIR} \
   --bert_file bert-base-cased \
