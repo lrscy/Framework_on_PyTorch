@@ -38,6 +38,12 @@ def make_model(args):
 
   return model, optimizer, criterion
 
+def save_best_model(model, prefix, name, total_step):
+  file_name = prefix + name
+  state = {'step': total_step + 1,
+           'state_dict': model.state_dict()}
+  torch.save(state, file_name)
+
 def evaluate(criterion, output, label, outputs, labels):
   '''
   Compute loss and record results here.
@@ -109,11 +115,11 @@ def run(args):
   model, optimizer, criterion = make_model(args)
   # Load model if it exists
   file_name = args.output_dir + 'model_' + args.suffix
-  start_epoch = 0
+  step = 0
   if os.path.exists(file_name):
     state = torch.load(file_name)
     model.load_state_dict(state['state_dict'])
-    start_epoch = state['epoch']
+    step = state['step']
   if args.multi_gpu:
     model = nn.DataParallel(model)
   model = model.cuda() if settings.USE_CUDA else model
@@ -121,9 +127,6 @@ def run(args):
   # Init
   ### MODIFY START HERE ###
   ''' Shift to your own metrics '''
-  model_dict = {'last': model, 'acc': None, 'recall': None,
-                'fval': None, 'loss': None}
-  epoch = {'last': 0, 'acc': 0, 'recall': 0, 'fval': 0, 'loss': 0}
   best_acc = 0
   best_recall = 0
   best_fval = 0
@@ -136,15 +139,15 @@ def run(args):
     for ep in range(args.epoch):
       print("######## Training ########",
             file=settings.SHELL_OUT_FILE, flush=True)
-      print('Epoch:', start_epoch + ep,
+      print('Epoch:', ep,
             file=settings.SHELL_OUT_FILE, flush=True)
       loss_train = []
       model.train()
-      print("\rTrain Step: {}/{} Loss: {}".format(0, 
-                                             total_train_examples, 0),
+      print("\rTrain Step: {} Loss: {}".format(step, 0),
             file=settings.SHELL_OUT_FILE, flush=True) # end='\r', 
 
       for i, example in enumerate(train_examples):
+        step += 1
 
         ### MODIFY START HERE ###
         '''
@@ -162,121 +165,96 @@ def run(args):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        if (i + 1) % 10 == 0:
-          print("\rTrain Step: {}/{} Loss: {}".format(i + 1,
-                                                 total_train_examples,
-                                                 loss.item()),
+        if step % 10 == 0:
+          print("\rTrain Step: {} Loss: {}".format(step, loss.item()),
                 file=settings.SHELL_OUT_FILE, flush=True) # end='\r', 
-      print("\rTrain Step: {}/{} Loss: {}".format(total_train_examples, 
-                                             total_train_examples,
-                                             sum(loss_train) / \
-                                               len(train_examples)),
-            file=settings.SHELL_OUT_FILE, flush=True)
-
-      if args.do_eval:
-        print("\n######## Evaluating ########",
-              file=settings.SHELL_OUT_FILE, flush=True)
-        eval_examples = reader.get_dev_examples(args.data_dir)
-        output_eval = []
-        label_eval = []
-        loss_eval_all = 0
-        model.eval()
-        total_eval_examples = len(eval_examples)
-        with torch.no_grad():
-          print("\rEval Step: {}/{}".format(0, total_eval_examples),
-                end='\r', file=settings.SHELL_OUT_FILE, flush=True)
-          for i, example in enumerate(eval_examples):
-            if (i + 1) % 100 == 0:
-              print("\rEval Step: {}/{}".format(i + 1,
-                                                total_eval_examples),
+          if args.do_eval:
+            print("\n######## Evaluating ########",
+                  file=settings.SHELL_OUT_FILE, flush=True)
+            eval_examples = reader.get_dev_examples(args.data_dir)
+            output_eval = []
+            label_eval = []
+            loss_eval_all = 0
+            model.eval()
+            total_eval_examples = len(eval_examples)
+            with torch.no_grad():
+              print("\rEval Step: {}/{}".format(0, total_eval_examples),
                     end='\r', file=settings.SHELL_OUT_FILE, flush=True)
+              for i, example in enumerate(eval_examples):
+                if (i + 1) % 100 == 0:
+                  print("\rEval Step: {}/{}".format(i + 1,
+                                                    total_eval_examples),
+                        end='\r', file=settings.SHELL_OUT_FILE, flush=True)
+    
+                ### MODIFY START HERE ###
+                '''
+                Adapt to output that your processor give, send them to models,
+                and calculate loss
+                '''
+                inputs = processor.convert_examples_to_tensor(example)
+                labels = processor.convert_labels_to_tensor(example.labels,
+                                                            labels_dict)
+                prediction = model(*inputs)
+                ### END HERE ###
+    
+                loss = evaluate(criterion, prediction, labels,
+                                output_eval, label_eval)
+                loss_eval_all += loss
+    
+              print("\rEval Step: {}/{}".format(total_eval_examples,
+                                                total_eval_examples),
+                    file=settings.SHELL_OUT_FILE, flush=True)
+    
+              loss_eval_all /= total_eval_examples
+              print('Loss:', loss_eval_all,
+                    file=settings.SHELL_OUT_FILE, flush=True)
+    
+              ### MODIFY START HERE ###
+              ''' Replace by your own evaluation funciton.  '''
+              acc, recall, fval, _ = \
+                precision_recall_fscore_support(label_eval, output_eval,
+                                                average='binary')
+              print("Accuracy:", acc,
+                    file=settings.SHELL_OUT_FILE, flush=True)
+              print("Recall:", recall,
+                    file=settings.SHELL_OUT_FILE, flush=True)
+              print("F-score", fval,
+                    file=settings.SHELL_OUT_FILE, flush=True)
+              ### END HERE ###
+    
+              save_model = copy.deepcopy(model)
+              save_model = save_model.module.cpu() if args.multi_gpu \
+                             else save_model.cpu()
 
-            ### MODIFY START HERE ###
-            '''
-            Adapt to output that your processor give, send them to models,
-            and calculate loss
-            '''
-            inputs = processor.convert_examples_to_tensor(example)
-            labels = processor.convert_labels_to_tensor(example.labels,
-                                                        labels_dict)
-            prediction = model(*inputs)
-            ### END HERE ###
+              prefix = args.output_dir + 'model_'
+              # save last model
+              save_best_model(model, prefix, 'last', step)
+    
+              ### MODIFY START HERE ###
+              ''' Replace following codes by your own metrics '''
+              # save model with best accuracy on dev set
+              if acc > best_acc:
+                best_acc = acc
+                save_best_model(model, prefix, 'acc', step)
+              # save model with best recall@1 on dev set
+              if recall > best_recall:
+                best_recall = recall
+                save_best_model(model, prefix, 'recall', step)
+              # save model with best recall@1 on dev set
+              if fval > best_fval:
+                best_fval = fval
+                save_best_model(model, prefix, 'fval', step)
+              # save model with best loss on dev set
+              if loss_eval_all < best_loss:
+                best_loss = loss_eval_all
+                save_best_model(model, prefix, 'loss', step)
+              ### END HERE ###
+              print(file=settings.SHELL_OUT_FILE, flush=True)
 
-            loss = evaluate(criterion, prediction, labels,
-                            output_eval, label_eval)
-            loss_eval_all += loss
-
-          print("\rEval Step: {}/{}".format(total_eval_examples,
-                                            total_eval_examples),
-                file=settings.SHELL_OUT_FILE, flush=True)
-
-          loss_eval_all /= total_eval_examples
-          print('Loss:', loss_eval_all,
-                file=settings.SHELL_OUT_FILE, flush=True)
-
-          ### MODIFY START HERE ###
-          ''' Replace by your own evaluation funciton.  '''
-          acc, recall, fval, _ = \
-            precision_recall_fscore_support(label_eval, output_eval,
-                                            average='binary')
-          print("Accuracy:", acc,
-                file=settings.SHELL_OUT_FILE, flush=True)
-          print("Recall:", recall,
-                file=settings.SHELL_OUT_FILE, flush=True)
-          print("F-score", fval,
-                file=settings.SHELL_OUT_FILE, flush=True)
-          ### END HERE ###
-
-          save_model = copy.deepcopy(model)
-          save_model = save_model.module.cpu() if args.multi_gpu \
-                         else save_model.cpu()
-          # save last model
-          epoch['last'] = start_epoch + ep
-          file_name = args.output_dir + 'model_last'
-          state = {'epoch': epoch['last'] + 1,
-                   'state_dict': save_model.state_dict()} #.module
-          torch.save(state, file_name)
-
-          ### MODIFY START HERE ###
-          ''' Replace following codes by your own metrics '''
-          # save model with best accuracy on dev set
-          if acc > best_acc:
-            best_acc = acc
-            epoch['acc'] = start_epoch + ep
-            model_dict['acc'] = save_model
-            file_name = args.output_dir + 'model_acc'
-            state = {'epoch': epoch['acc'] + 1,
-                     'state_dict': model_dict['acc'].state_dict()}
-            torch.save(state, file_name)
-          # save model with best recall@1 on dev set
-          if recall > best_recall:
-            best_recall = recall
-            epoch['recall'] = start_epoch + ep
-            model_dict['recall'] = save_model
-            file_name = args.output_dir + 'model_recall'
-            state = {'epoch': epoch['recall'] + 1,
-                     'state_dict': model_dict['recall'].state_dict()}
-            torch.save(state, file_name)
-          # save model with best recall@1 on dev set
-          if fval > best_fval:
-            best_fval = fval
-            epoch['fval'] = start_epoch + ep
-            model_dict['fval'] = save_model
-            file_name = args.output_dir + 'model_fval'
-            state = {'epoch': epoch['fval'] + 1,
-                     'state_dict': model_dict['fval'].state_dict()}
-            torch.save(state, file_name)
-          # save model with best loss on dev set
-          if loss_eval_all < best_loss:
-            best_loss = loss_eval_all
-            epoch['loss'] = start_epoch + ep
-            model_dict['loss'] = save_model
-            file_name = args.output_dir + 'model_loss'
-            state = {'epoch': epoch['loss'] + 1,
-                     'state_dict': model_dict['loss'].state_dict()}
-            torch.save(state, file_name)
-          ### END HERE ###
-          print(file=settings.SHELL_OUT_FILE, flush=True)
+    print("\rTrain Step: {} Loss: {}".format(step,
+                                           sum(loss_train) / \
+                                             len(train_examples)),
+          file=settings.SHELL_OUT_FILE, flush=True)
 
   if args.do_predict:
     print("######### Testing ########",

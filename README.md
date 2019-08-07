@@ -1,6 +1,6 @@
 # Overview
 
-The framework is built based on PyTorch framework, mainly used on training and testing model.
+The framework is built based on PyTorch framework, mainly used on training and testing model. Evaluation runs based on step when achieving specific rules.
 
 # Usage
 
