@@ -111,19 +111,6 @@ def run(args):
     with open(label_path, 'w', encoding='utf-8') as f:
       pprint.pprint(labels_dict, stream=f)
 
-  # Create model
-  model, optimizer, criterion = make_model(args)
-  # Load model if it exists
-  file_name = args.output_dir + 'model_' + args.suffix
-  step = 0
-  if os.path.exists(file_name):
-    state = torch.load(file_name)
-    model.load_state_dict(state['state_dict'])
-    step = state['step']
-  if args.multi_gpu:
-    model = nn.DataParallel(model)
-  model = model.cuda() if settings.USE_CUDA else model
-
   # Init
   ### MODIFY START HERE ###
   ''' Shift to your own metrics '''
@@ -134,6 +121,19 @@ def run(args):
   ### END HERE ###
 
   if args.do_train:
+    # Create model
+    model, optimizer, criterion = make_model(args)
+    # Load model if it exists
+    file_name = args.output_dir + 'model_' + args.suffix
+    step = 0
+    if os.path.exists(file_name):
+      state = torch.load(file_name)
+      model.load_state_dict(state['state_dict'])
+      step = state['step']
+    if args.multi_gpu:
+      model = nn.DataParallel(model)
+    model = model.cuda() if settings.USE_CUDA else model
+
     train_examples = reader.get_train_examples(args.data_dir)
     total_train_examples = len(train_examples)
     for ep in range(args.epoch):
@@ -236,11 +236,11 @@ def run(args):
               if acc > best_acc:
                 best_acc = acc
                 save_best_model(model, prefix, 'acc', step)
-              # save model with best recall@1 on dev set
+              # save model with best recall on dev set
               if recall > best_recall:
                 best_recall = recall
                 save_best_model(model, prefix, 'recall', step)
-              # save model with best recall@1 on dev set
+              # save model with best f1-score on dev set
               if fval > best_fval:
                 best_fval = fval
                 save_best_model(model, prefix, 'fval', step)
@@ -288,7 +288,7 @@ def run(args):
       with torch.no_grad():
         for i, example in enumerate(test_examples):
           if (i + 1) % 100 == 0:
-            print("\rTrain Step: {}/{}".format(i + 1, total_test_examples),
+            print("\rTest Step: {}/{}".format(i + 1, total_test_examples),
                   end='\r', file=settings.SHELL_OUT_FILE, flush=True)
 
           ### MODIFY START HERE ###
