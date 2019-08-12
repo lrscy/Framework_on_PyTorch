@@ -38,6 +38,12 @@ def make_model(args):
 
   return model, optimizer, criterion
 
+def save_best_model(model, prefix, name, epoch):
+  file_name = prefix + 'acc'
+  state = {'epoch': epoch + 1,
+           'state_dict': model.state_dict()}
+  torch.save(state, file_name)
+
 def evaluate(criterion, output, label, outputs, labels):
   '''
   Compute loss and record results here.
@@ -84,7 +90,7 @@ def run(args):
   else:
     settings.SHELL_OUT_FILE = sys.stdout
 
-  # Build model and data reader/processor
+  # Build data reader/processor
   ### MODIFY START HERE ###
   ''' Shift to your own tokenizer, processor, and reader '''
   tokenizer = BertTokenizer.from_pretrained(
@@ -105,25 +111,9 @@ def run(args):
     with open(label_path, 'w', encoding='utf-8') as f:
       pprint.pprint(labels_dict, stream=f)
 
-  # Create model
-  model, optimizer, criterion = make_model(args)
-  # Load model if it exists
-  file_name = args.output_dir + 'model_' + args.suffix
-  start_epoch = 0
-  if os.path.exists(file_name):
-    state = torch.load(file_name)
-    model.load_state_dict(state['state_dict'])
-    start_epoch = state['epoch']
-  if args.multi_gpu:
-    model = nn.DataParallel(model)
-  model = model.cuda() if settings.USE_CUDA else model
-
   # Init
   ### MODIFY START HERE ###
   ''' Shift to your own metrics '''
-  model_dict = {'last': model, 'acc': None, 'recall': None,
-                'fval': None, 'loss': None}
-  epoch = {'last': 0, 'acc': 0, 'recall': 0, 'fval': 0, 'loss': 0}
   best_acc = 0
   best_recall = 0
   best_fval = 0
@@ -131,6 +121,19 @@ def run(args):
   ### END HERE ###
 
   if args.do_train:
+    # Create model
+    model, optimizer, criterion = make_model(args)
+    # Load model if it exists
+    file_name = args.output_dir + 'model_' + args.suffix
+    start_epoch = 0
+    if os.path.exists(file_name):
+      state = torch.load(file_name)
+      model.load_state_dict(state['state_dict'])
+      start_epoch = state['epoch']
+    if args.multi_gpu:
+      model = nn.DataParallel(model)
+    model = model.cuda() if settings.USE_CUDA else model
+
     train_examples = reader.get_train_examples(args.data_dir)
     total_train_examples = len(train_examples)
     for ep in range(args.epoch):
@@ -230,51 +233,29 @@ def run(args):
           save_model = copy.deepcopy(model)
           save_model = save_model.module.cpu() if args.multi_gpu \
                          else save_model.cpu()
+          prefix = args.output_dir + 'model_'
+          cur_epoch = start_epoch + ep
           # save last model
-          epoch['last'] = start_epoch + ep
-          file_name = args.output_dir + 'model_last'
-          state = {'epoch': epoch['last'] + 1,
-                   'state_dict': save_model.state_dict()} #.module
-          torch.save(state, file_name)
+          save_best_model(save_model, prefix, 'last', cur_epoch)
 
           ### MODIFY START HERE ###
           ''' Replace following codes by your own metrics '''
           # save model with best accuracy on dev set
           if acc > best_acc:
             best_acc = acc
-            epoch['acc'] = start_epoch + ep
-            model_dict['acc'] = save_model
-            file_name = args.output_dir + 'model_acc'
-            state = {'epoch': epoch['acc'] + 1,
-                     'state_dict': model_dict['acc'].state_dict()}
-            torch.save(state, file_name)
+            save_best_model(save_model, prefix, 'acc', cur_epoch)
           # save model with best recall@1 on dev set
           if recall > best_recall:
             best_recall = recall
-            epoch['recall'] = start_epoch + ep
-            model_dict['recall'] = save_model
-            file_name = args.output_dir + 'model_recall'
-            state = {'epoch': epoch['recall'] + 1,
-                     'state_dict': model_dict['recall'].state_dict()}
-            torch.save(state, file_name)
+            save_best_model(save_model, prefix, 'recall', cur_epoch)
           # save model with best recall@1 on dev set
           if fval > best_fval:
             best_fval = fval
-            epoch['fval'] = start_epoch + ep
-            model_dict['fval'] = save_model
-            file_name = args.output_dir + 'model_fval'
-            state = {'epoch': epoch['fval'] + 1,
-                     'state_dict': model_dict['fval'].state_dict()}
-            torch.save(state, file_name)
+            save_best_model(save_model, prefix, 'fval', cur_epoch)
           # save model with best loss on dev set
           if loss_eval_all < best_loss:
             best_loss = loss_eval_all
-            epoch['loss'] = start_epoch + ep
-            model_dict['loss'] = save_model
-            file_name = args.output_dir + 'model_loss'
-            state = {'epoch': epoch['loss'] + 1,
-                     'state_dict': model_dict['loss'].state_dict()}
-            torch.save(state, file_name)
+            save_best_model(save_model, prefix, 'loss', cur_epoch)
           ### END HERE ###
           print(file=settings.SHELL_OUT_FILE, flush=True)
 
@@ -310,7 +291,7 @@ def run(args):
       with torch.no_grad():
         for i, example in enumerate(test_examples):
           if (i + 1) % 100 == 0:
-            print("\rTrain Step: {}/{}".format(i + 1, total_test_examples),
+            print("\rTest Step: {}/{}".format(i + 1, total_test_examples),
                   end='\r', file=settings.SHELL_OUT_FILE, flush=True)
 
           ### MODIFY START HERE ###
