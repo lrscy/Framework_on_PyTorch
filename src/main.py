@@ -244,11 +244,11 @@ def run(args):
           if acc > best_acc:
             best_acc = acc
             save_best_model(save_model, prefix, 'acc', cur_epoch)
-          # save model with best recall@1 on dev set
+          # save model with best recall on dev set
           if recall > best_recall:
             best_recall = recall
             save_best_model(save_model, prefix, 'recall', cur_epoch)
-          # save model with best recall@1 on dev set
+          # save model with best f1-score on dev set
           if fval > best_fval:
             best_fval = fval
             save_best_model(save_model, prefix, 'fval', cur_epoch)
