@@ -168,6 +168,7 @@ def run(args):
         if step % 10 == 0:
           print("\rTrain Step: {} Loss: {}".format(step, loss.item()),
                 file=settings.SHELL_OUT_FILE, flush=True) # end='\r', 
+        if step % 100 == 0:
           if args.do_eval:
             print("\n######## Evaluating ########",
                   file=settings.SHELL_OUT_FILE, flush=True)
@@ -228,26 +229,26 @@ def run(args):
 
               prefix = args.output_dir + 'model_'
               # save last model
-              save_best_model(model, prefix, 'last', step)
+              save_best_model(save_model, prefix, 'last', step)
     
               ### MODIFY START HERE ###
               ''' Replace following codes by your own metrics '''
               # save model with best accuracy on dev set
               if acc > best_acc:
                 best_acc = acc
-                save_best_model(model, prefix, 'acc', step)
+                save_best_model(save_model, prefix, 'acc', step)
               # save model with best recall on dev set
               if recall > best_recall:
                 best_recall = recall
-                save_best_model(model, prefix, 'recall', step)
+                save_best_model(save_model, prefix, 'recall', step)
               # save model with best f1-score on dev set
               if fval > best_fval:
                 best_fval = fval
-                save_best_model(model, prefix, 'fval', step)
+                save_best_model(save_model, prefix, 'fval', step)
               # save model with best loss on dev set
               if loss_eval_all < best_loss:
                 best_loss = loss_eval_all
-                save_best_model(model, prefix, 'loss', step)
+                save_best_model(save_model, prefix, 'loss', step)
               ### END HERE ###
               print(file=settings.SHELL_OUT_FILE, flush=True)
 
